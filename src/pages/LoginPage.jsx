@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Lock, User } from 'lucide-react';
+import { useConfiguracionInstitucion } from '../context/ConfiguracionInstitucionContext';
 
 export default function LoginPage() {
   const [loginInput, setLoginInput] = useState('');
@@ -9,6 +10,10 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const { login, loading } = useAuth();
   const navigate = useNavigate();
+  const { configuracion } = useConfiguracionInstitucion();
+  const primary = configuracion.color_primario || '#0F172A';
+  const secondary = configuracion.color_secundario || '#0369A1';
+  const accent = configuracion.color_acento || '#0EA5E9';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,14 +27,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-slate-900 to-navy-800 flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4" style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 border border-slate-100">
         <div className="text-center mb-8">
-          <div className="inline-flex p-3 rounded-xl bg-sky-50 text-sky-600 mb-3">
-            <ShieldCheck className="w-10 h-10" />
+          <div className="mb-3 inline-flex h-16 min-w-16 items-center justify-center rounded-xl bg-slate-50 p-3" style={{ color: secondary }}>
+            {configuracion.url_logo ? <img src={configuracion.url_logo} alt="Logotipo institucional" className="max-h-12 max-w-40 object-contain" onError={(event) => { event.currentTarget.style.display = 'none'; }} /> : <ShieldCheck className="h-10 w-10" />}
           </div>
-          <h2 className="text-2xl font-bold text-slate-900">Sistema de Créditos</h2>
-          <p className="text-sm text-slate-500 mt-1">Gestión Crediticia Bancaria INF-241</p>
+          <h2 className="text-2xl font-bold text-slate-900">{configuracion.razon_social || 'Sistema de Créditos'}</h2>
+          <p className="mt-1 text-sm text-slate-500">{configuracion.nit ? `NIT ${configuracion.nit}` : 'Gestión institucional de créditos'}</p>
         </div>
 
         {error && (
@@ -72,7 +77,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+            className="w-full rounded-lg py-3 font-semibold text-white shadow-md transition-all hover:brightness-95 disabled:opacity-50" style={{ backgroundColor: secondary }}
           >
             {loading ? 'Ingresando...' : 'Iniciar Sesión'}
           </button>

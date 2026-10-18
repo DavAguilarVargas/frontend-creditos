@@ -5,3 +5,39 @@
 body {
   @apply bg-slate-50 text-slate-800 antialiased font-sans;
 }
+
+
+/*:root {
+  --brand-primary: #0F172A;
+  --brand-secondary: #0369A1;
+  --brand-accent: #0EA5E9;
+}*/
+
+
+/*
+ * Los componentes existentes ya usan clases Tailwind bg-slate-900/bg-slate-800
+ * para sus acciones principales. Se conserva el marcado y se aplica el color de
+ * acento configurado por ADMIN, sin recolorear contenedores ni el sidebar.
+ */
+
+
+
+/* button.bg-slate-900,
+button.bg-slate-800,
+a.bg-slate-900,
+a.bg-slate-800,
+button[class~="bg-slate-900"],
+button[class~="bg-slate-800"] {
+  background-color: var(--brand-accent, #0EA5E9) !important;
+  border-color: var(--brand-accent, #0EA5E9);
+}
+
+button.bg-slate-900:hover,
+button.bg-slate-800:hover,
+a.bg-slate-900:hover,
+a.bg-slate-800:hover,
+button[class~="bg-slate-900"]:hover,
+button[class~="bg-slate-800"]:hover {
+  filter: brightness(0.92);
+}
+*/

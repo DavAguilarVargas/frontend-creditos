@@ -1,0 +1,1534 @@
+mejorar esta parte para que sea mas profesional y en caso real,CU09 – Generar contrato  
+Elemento  Descripción 
+Actor principal  Sistema 
+Precondición  Crédito aprobado. 
+Flujo principal  1. Toma datos aprobados.  
+2. Genera número de contrato.  
+3. Registra fecha y estado.  
+4. Asocia contrato al crédito. 
+Alternativas / excepciones  Datos incompletos. 
+Postcondición  Contrato generado. 
+ 
+CU10 – Generar cronograma  
+Elemento  Descripción 
+Actor principal  Sistema 
+Precondición  Crédito aprobado y parámetros completos. 
+11 
+ 
+Flujo principal  1. Toma monto, tasa y plazo.  
+2. Calcula cuotas.  
+3. Genera fechas.  
+4. Guarda cuotas. 
+Alternativas / excepciones  Parámetros inválidos. 
+Postcondición  Cronograma registrado.  Contrato  Formalizar jurídicamente el crédito. ademas cabe recordar que se tiene las siguientes tablas en la base de datos: create table public.solicitud_credito (
+  id_solicitud serial not null,
+  id_cliente integer not null,
+  monto_solicitado numeric(12, 2) not null,
+  plazo_meses integer not null,
+  tasa_interes_anual numeric(6, 3) not null,
+  destino_credito text not null,
+  estado character varying(50) null default 'REGISTRADA'::character varying,
+  fecha_solicitud timestamp without time zone null default CURRENT_TIMESTAMP,
+  tipo_garantia character varying(50) null,
+  constraint solicitud_credito_pkey primary key (id_solicitud),
+  constraint solicitud_credito_id_cliente_fkey foreign KEY (id_cliente) references cliente (id_cliente),
+  constraint solicitud_credito_estado_check check (
+    (
+      (estado)::text = any (
+        (
+          array[
+            'REGISTRADA'::character varying,
+            'EN_EVALUACION'::character varying,
+            'APROBADA'::character varying,
+            'RECHAZADA'::character varying
+          ]
+        )::text[]
+      )
+    )
+  ),
+  constraint solicitud_credito_plazo_check check ((plazo_meses > 0)),
+  constraint solicitud_credito_plazo_meses_check check ((plazo_meses > 0)),
+  constraint solicitud_credito_monto_solicitado_check check ((monto_solicitado > (0)::numeric)),
+  constraint solicitud_credito_monto_check check ((monto_solicitado > (0)::numeric))
+) TABLESPACE pg_default;  create table public.evaluacion_credito (
+  id_evaluacion serial not null,
+  id_solicitud integer not null,
+  fecha_evaluacion date not null,
+  ingresos numeric(12, 2) null,
+  gastos numeric(12, 2) null,
+  capacidad_pago numeric(12, 2) null,
+  nivel_riesgo character varying(20) null,
+  resultado character varying(20) null,
+  constraint evaluacion_credito_pkey primary key (id_evaluacion),
+  constraint evaluacion_credito_id_solicitud_key unique (id_solicitud),
+  constraint evaluacion_credito_id_solicitud_fkey foreign KEY (id_solicitud) references solicitud_credito (id_solicitud) on delete CASCADE,
+  constraint evaluacion_credito_gastos_check check ((gastos >= (0)::numeric)),
+  constraint evaluacion_credito_ingresos_check check ((ingresos >= (0)::numeric)),
+  constraint evaluacion_credito_resultado_check check (
+    (
+      (resultado)::text = any (
+        (
+          array[
+            'FAVORABLE'::character varying,
+            'DESFAVORABLE'::character varying
+          ]
+        )::text[]
+      )
+    )
+  )
+) TABLESPACE pg_default; create table public.credito (
+  id_credito serial not null,
+  id_solicitud integer not null,
+  numero_credito character varying(20) not null,
+  monto_aprobado numeric(12, 2) not null,
+  tasa_interes numeric(6, 3) not null,
+  plazo_meses integer not null,
+  fecha_desembolso date null,
+  saldo_capital numeric(12, 2) not null,
+  estado character varying(20) not null default 'APROBADO'::character varying,
+  constraint credito_pkey primary key (id_credito),
+  constraint credito_id_solicitud_key unique (id_solicitud),
+  constraint credito_numero_credito_key unique (numero_credito),
+  constraint credito_id_solicitud_fkey foreign KEY (id_solicitud) references solicitud_credito (id_solicitud),
+  constraint credito_estado_check check (
+    (
+      (estado)::text = any (
+        (
+          array[
+            'APROBADO'::character varying,
+            'DESEMBOLSADO'::character varying,
+            'VIGENTE'::character varying,
+            'EN_MORA'::character varying,
+            'CANCELADO'::character varying
+          ]
+        )::text[]
+      )
+    )
+  ),
+  constraint credito_tasa_interes_check check ((tasa_interes >= (0)::numeric)),
+  constraint credito_monto_aprobado_check check ((monto_aprobado > (0)::numeric)),
+  constraint credito_plazo_meses_check check ((plazo_meses > 0)),
+  constraint credito_saldo_capital_check check ((saldo_capital >= (0)::numeric))
+) TABLESPACE pg_default;create table public.contrato (
+  id_contrato serial not null,
+  id_credito integer not null,
+  numero_contrato character varying(20) not null,
+  fecha_firma date null,
+  estado character varying(20) null,
+  constraint contrato_pkey primary key (id_contrato),
+  constraint contrato_id_credito_key unique (id_credito),
+  constraint contrato_numero_contrato_key unique (numero_contrato),
+  constraint contrato_id_credito_fkey foreign KEY (id_credito) references credito (id_credito)
+) TABLESPACE pg_default; create table public.cuota (
+  id_cuota serial not null,
+  id_credito integer not null,
+  numero integer not null,
+  fecha_vencimiento date not null,
+  capital numeric(12, 2) not null,
+  interes numeric(12, 2) not null,
+  monto numeric(12, 2) not null,
+  saldo numeric(12, 2) not null,
+  monto_penalidad numeric(12, 2) null default 0.00,
+  estado character varying(20) not null default 'PENDIENTE'::character varying,
+  constraint cuota_pkey primary key (id_cuota),
+  constraint cuota_id_credito_numero_key unique (id_credito, numero),
+  constraint cuota_id_credito_fkey foreign KEY (id_credito) references credito (id_credito) on delete CASCADE,
+  constraint cuota_monto_check check ((monto >= (0)::numeric)),
+  constraint cuota_monto_penalidad_check check ((monto_penalidad >= (0)::numeric)),
+  constraint cuota_capital_check check ((capital >= (0)::numeric)),
+  constraint cuota_saldo_check check ((saldo >= (0)::numeric)),
+  constraint cuota_estado_check check (
+    (
+      (estado)::text = any (
+        (
+          array[
+            'PENDIENTE'::character varying,
+            'VENCIDA'::character varying,
+            'PAGADA'::character varying
+          ]
+        )::text[]
+      )
+    )
+  ),
+  constraint cuota_interes_check check ((interes >= (0)::numeric))
+) TABLESPACE pg_default;  create table public.configuracion_institucion (
+  id serial not null,
+  razon_social character varying(150) not null,
+  nit character varying(50) not null,
+  direccion text null,
+  telefono character varying(50) null,
+  moneda_base character varying(10) null default 'BOB'::character varying,
+  tasa_interes_penal_diaria numeric(5, 4) null default 0.001,
+  url_logo text null,
+  constraint configuracion_institucion_pkey primary key (id)
+) TABLESPACE pg_default;         create table public.garantia (
+  id_garantia serial not null,
+  id_solicitud integer not null,
+  tipo_garantia character varying(50) not null,
+  descripcion text not null,
+  valor_avaluo numeric(12, 2) not null default 0.00,
+  estado character varying(30) null default 'VIGENTE'::character varying,
+  documento_respaldo_url text null,
+  constraint garantia_pkey primary key (id_garantia),
+  constraint garantia_id_solicitud_fkey foreign KEY (id_solicitud) references solicitud_credito (id_solicitud) on delete CASCADE,
+  constraint garantia_valor_avaluo_check check ((valor_avaluo >= (0)::numeric))
+) TABLESPACE pg_default; y segun el Diagrama 1 – Casos de uso     me gustaria tener contratos mas formales como referencia de banco sol donde sus hojas son membretadas, en un contratoprimero se tiene el Acuerdo de Condiciones de Cretido/Comprobante de desembolso estan los datos del usuario,ci,monto,cuota,plazo,interes,fecha de pago cada mes,garantias,nro credito,Puntos varios, Firma del ciliente, Nombre,CI, Fecha; Hoja 2 la Tabla de Amortizacion con el cronograma de pagos y datos del tipo de credito,interes,plazo,fecha,monto desembolsado todo membretado,Hoja 3 Contrato Privado  import React, { useState } from 'react';
+import { 
+  ShieldCheck, ShieldAlert, CheckCircle2, XCircle, FileText, 
+  Calendar, Eye, Check, X, User, DollarSign, Calculator, 
+  AlertTriangle, Printer, Download, Search, Filter, PieChart, 
+  TrendingUp, BarChart2, Clock, ArrowRight, RefreshCw, Lock, Building
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+// MOCK DE SOLICITUDES EN ESTADO EN_EVALUACION (Pendientes de decisión)
+const mockSolicitudesEnEvaluacion = [
+  {
+    id_solicitud: 101,
+    id_cliente: 1,
+    cliente: 'Maria Elena Quispe Condori',
+    ci: '4521378 LP',
+    monto_solicitado: 50000.00,
+    plazo_meses: 24,
+    tasa_interes_anual: 10.50,
+    destino_credito: 'Mi negocio - Capital de Operaciones',
+    tipo_garantia: 'PRENDARIA',
+    cuota_estimada: 2319.45,
+    estado: 'EN_EVALUACION',
+    fecha_solicitud: '2026-03-12 10:30',
+    evaluacion: {
+      id_evaluacion: 88,
+      analista: 'Lic. Juan Perez (Analista Sr.)',
+      ingresos: 7700.00,
+      gastos: 3500.00,
+      capacidad_pago: 4200.00,
+      cobertura_dscr: '181.1%',
+      nivel_riesgo: 'BAJO',
+      resultado: 'FAVORABLE', // RN03
+      ref_asfi: 'ASFI-982134',
+      calificacion_asfi: 'Clase A',
+      score_buro: 820,
+      observaciones_analista: 'Cliente con excelente capacidad de pago. Flujo de caja verificado en negocio propio. Se recomienda aprobación.'
+    },
+    garantia_detalles: {
+      tipo: 'Maquinaria Industrial (Prendaria)',
+      valor_comercial: 85000.00,
+      cobertura_garantia: '170%'
+    }
+  },
+  {
+    id_solicitud: 102,
+    id_cliente: 2,
+    cliente: 'Carlos Alberto Mendoza',
+    ci: '6812493 CB',
+    monto_solicitado: 120000.00,
+    plazo_meses: 60,
+    tasa_interes_anual: 11.50,
+    destino_credito: 'Vivienda - Vivienda Normal',
+    tipo_garantia: 'HIPOTECARIA',
+    cuota_estimada: 2639.12,
+    estado: 'EN_EVALUACION',
+    fecha_solicitud: '2026-03-10 14:15',
+    evaluacion: {
+      id_evaluacion: 89,
+      analista: 'Lic. Ana Gomez (Analista Jr.)',
+      ingresos: 11000.00,
+      gastos: 7800.00,
+      capacidad_pago: 3200.00,
+      cobertura_dscr: '121.2%',
+      nivel_riesgo: 'MEDIO',
+      resultado: 'FAVORABLE',
+      ref_asfi: 'ASFI-441209',
+      calificacion_asfi: 'Clase A',
+      score_buro: 760,
+      observaciones_analista: 'Margen de capacidad ajustado pero respaldado por inmueble urbano de alta liquidez.'
+    },
+    garantia_detalles: {
+      tipo: 'Inmueble Urbano - Casa Chalet',
+      valor_comercial: 210000.00,
+      cobertura_garantia: '175%'
+    }
+  },
+  {
+    id_solicitud: 105,
+    id_cliente: 5,
+    cliente: 'Gonzalo Vargas Terán',
+    ci: '2901842 SC',
+    monto_solicitado: 600000.00, // Supera límite atribuido estándar (RN04)
+    plazo_meses: 120,
+    tasa_interes_anual: 10.50,
+    destino_credito: 'Mi negocio - Capital de Inversión',
+    tipo_garantia: 'HIPOTECARIA',
+    cuota_estimada: 8140.20,
+    estado: 'EN_EVALUACION',
+    fecha_solicitud: '2026-03-14 09:10',
+    evaluacion: {
+      id_evaluacion: 90,
+      analista: 'Lic. Juan Perez (Analista Sr.)',
+      ingresos: 25000.00,
+      gastos: 14000.00,
+      capacidad_pago: 11000.00,
+      cobertura_dscr: '135.1%',
+      nivel_riesgo: 'MEDIO',
+      resultado: 'FAVORABLE',
+      ref_asfi: 'ASFI-882103',
+      calificacion_asfi: 'Clase A',
+      score_buro: 790,
+      observaciones_analista: 'Solicitud de alto volumen. Proyecto de inversión fabril justificado.'
+    },
+    garantia_detalles: {
+      tipo: 'Planta Industrial Yapacaní',
+      valor_comercial: 1200000.00,
+      cobertura_garantia: '200%'
+    }
+  }
+];
+
+// MOCK HISTÓRICO DE RESOLUCIONES (Aprobadas / Rechazadas previamente)
+const mockHistoricoResoluciones = [
+  {
+    id_solicitud: 103,
+    cliente: 'Roberto Gomez Mamani',
+    ci: '3491205 LP',
+    monto: 35000.00,
+    plazo_meses: 18,
+    tasa: 20.00,
+    estado: 'APROBADA',
+    fecha_resolucion: '2026-03-08 11:20',
+    aprobado_por: 'Jefe de Créditos (Lic. Ramirez)',
+    num_contrato: 'CTR-2026-8801',
+    dictamen_analista: 'FAVORABLE (DSCR 185%)',
+    periodo_mes: '2026-03',
+    periodo_anio: '2026',
+    periodo_dia: '2026-03-08'
+  },
+  {
+    id_solicitud: 104,
+    cliente: 'Lucia Fernandez Roca',
+    ci: '5102938 SC',
+    monto: 80000.00,
+    plazo_meses: 36,
+    tasa: 22.00,
+    estado: 'RECHAZADA',
+    fecha_resolucion: '2026-03-05 16:45',
+    aprobado_por: 'Jefe de Créditos (Lic. Ramirez)',
+    motivo_rechazo: 'Registro de mora previa en la Central de Riesgos ASFI.',
+    dictamen_analista: 'DESFAVORABLE',
+    periodo_mes: '2026-03',
+    periodo_anio: '2026',
+    periodo_dia: '2026-03-05'
+  }
+];
+
+export default function AprobacionesPage() {
+  const { usuario } = useAuth();
+
+  // NAVEGACIÓN VISTAS: 'PENDIENTES' | 'HISTORIAL' | 'ESTADISTICAS'
+  const [vistaActiva, setVistaActiva] = useState('PENDIENTES');
+  const [filtroEstadistica, setFiltroEstadistica] = useState('MES'); // 'DIA' | 'MES' | 'ANIO'
+
+  // ESTADO DE SOLICITUDES Y SELECCIÓN
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState(mockSolicitudesEnEvaluacion);
+  const [historicoResoluciones, setHistoricoResoluciones] = useState(mockHistoricoResoluciones);
+  const [solicitudSel, setSolicitudSel] = useState(null);
+
+  // MODALES & NOTIFICACIONES
+  const [modalAccion, setModalAccion] = useState(null); // 'CONFIRMAR_APROBAR' | 'CONFIRMAR_RECHAZAR' | 'VER_DOCUMENTOS'
+  const [motivoRechazo, setMotivoRechazo] = useState('');
+  const [docModal, setDocModal] = useState(null);
+  const [notificacion, setNotificacion] = useState(null);
+
+  // FILTROS EN HISTORIAL
+  const [busquedaHistorial, setBusquedaHistorial] = useState('');
+  const [filtroEstadoHistorial, setFiltroEstadoHistorial] = useState('TODOS');
+
+  // LÍMITE DE ATRIBUCIÓN DEL USUARIO (RN04)
+  const LIMITE_ATRIBUCION_JEFE = 500000.00; // Ej. 500,000 Bs.
+
+  const mostrarNotificacion = (tipo, titulo, mensaje) => {
+    setNotificacion({ tipo, titulo, mensaje });
+    setTimeout(() => setNotificacion(null), 5000);
+  };
+
+  // CÁLCULO DE TABLA DE AMORTIZACIÓN FRANCESA (RN06)
+  const generarCronogramaFrances = (monto, plazoMeses, tasaAnual) => {
+    const i_mensual = (tasaAnual / 100) / 12;
+    const cuota = monto * (i_mensual * Math.pow(1 + i_mensual, plazoMeses)) / (Math.pow(1 + i_mensual, plazoMeses) - 1);
+    
+    let saldo = monto;
+    const tabla = [];
+    const fechaInicio = new Date();
+
+    for (let k = 1; k <= plazoMeses; k++) {
+      const interes = saldo * i_mensual;
+      const capital = cuota - interes;
+      saldo = Math.max(0, saldo - capital);
+
+      const fechaPago = new Date(fechaInicio);
+      fechaPago.setMonth(fechaPago.getMonth() + k);
+
+      tabla.push({
+        num_cuota: k,
+        fecha_vencimiento: fechaPago.toISOString().split('T')[0],
+        cuota_total: cuota.toFixed(2),
+        capital: capital.toFixed(2),
+        interes: interes.toFixed(2),
+        saldo_pendiente: saldo.toFixed(2)
+      });
+    }
+    return tabla;
+  };
+
+  // ------------------------------------------------------------------
+  // EJECUCIÓN CU07: APROBAR CRÉDITO Y GENERAR CONTRATO/CRONOGRAMA (RN02, RN05, RN06)
+  // ------------------------------------------------------------------
+  const handleEjecutarAprobacionOficial = () => {
+    if (!solicitudSel) return;
+
+    // 1. RN04: Verificar Atribución
+    if (solicitudSel.monto_solicitado > LIMITE_ATRIBUCION_JEFE) {
+      mostrarNotificacion('warning', 'RN04: Exceso de Atribución', `El monto solicitado (Bs. ${solicitudSel.monto_solicitado.toLocaleString()}) supera su límite permitido (Bs. ${LIMITE_ATRIBUCION_JEFE.toLocaleString()}). Requiere escalamiento al Comité de Crédito.`);
+      setModalAccion(null);
+      return;
+    }
+
+    const hoy = new Date();
+    const fechaIso = hoy.toISOString().split('T')[0];
+    const numContrato = `CTR-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // 2. Generar Contrato (RN05)
+    const docContrato = {
+      num_contrato: numContrato,
+      fecha_emision: hoy.toLocaleDateString(),
+      titular: solicitudSel.cliente,
+      ci: solicitudSel.ci,
+      monto: solicitudSel.monto_solicitado,
+      tasa: solicitudSel.tasa_interes_anual,
+      plazo: solicitudSel.plazo_meses,
+      aprobado_por: usuario?.nombre || 'Jefe de Créditos'
+    };
+
+    // 3. Generar Cronograma de Cuotas (RN06)
+    const planCuotas = generarCronogramaFrances(
+      solicitudSel.monto_solicitado,
+      solicitudSel.plazo_meses,
+      solicitudSel.tasa_interes_anual
+    );
+
+    // 4. Objeto de Resolución para el Histórico / Reportes
+    const nuevaResolucion = {
+      id_solicitud: solicitudSel.id_solicitud,
+      cliente: solicitudSel.cliente,
+      ci: solicitudSel.ci,
+      monto: solicitudSel.monto_solicitado,
+      plazo_meses: solicitudSel.plazo_meses,
+      tasa: solicitudSel.tasa_interes_anual,
+      estado: 'APROBADA', // RN02
+      fecha_resolucion: hoy.toLocaleString(),
+      aprobado_por: usuario?.nombre || 'Jefe de Créditos',
+      num_contrato: numContrato,
+      dictamen_analista: solicitudSel.evaluacion.resultado,
+      periodo_mes: '2026-03',
+      periodo_anio: '2026',
+      periodo_dia: fechaIso,
+      contrato_doc: docContrato,
+      cronograma_doc: planCuotas
+    };
+
+    // Actualizar Histórico
+    setHistoricoResoluciones([nuevaResolucion, ...historicoResoluciones]);
+
+    // Remover de Pendientes
+    setSolicitudesPendientes(solicitudesPendientes.filter(s => s.id_solicitud !== solicitudSel.id_solicitud));
+
+    // Preparar documentos generados para el modal de visualización/impresión
+    setDocModal({
+      contrato: docContrato,
+      cronograma: planCuotas,
+      solicitud: solicitudSel
+    });
+
+    mostrarNotificacion(
+      'success', 
+      'CU07: Crédito Aprobado Exitosamente', 
+      `Solicitud SOL-#${solicitudSel.id_solicitud} APROBADA. Contrato ${numContrato} y Cronograma generados.`
+    );
+
+    // =========================================================================
+    // CRUCIAL: REINICIAR PANEL DERECHO A ESTADO EN BLANCO Y MOSTRAR CONFIRMACIÓN
+    // =========================================================================
+    setSolicitudSel(null); 
+    setModalAccion('VER_DOCUMENTOS');
+  };
+
+  // ------------------------------------------------------------------
+  // EJECUCIÓN CU08: RECHAZAR CRÉDITO
+  // ------------------------------------------------------------------
+  const handleEjecutarRechazoOficial = (e) => {
+    e.preventDefault();
+    if (!motivoRechazo.trim()) {
+      mostrarNotificacion('error', 'Excepción CU08', 'Debe escribir la justificación técnica del rechazo.');
+      return;
+    }
+
+    const hoy = new Date();
+    const fechaIso = hoy.toISOString().split('T')[0];
+
+    const resolucionRechazo = {
+      id_solicitud: solicitudSel.id_solicitud,
+      cliente: solicitudSel.cliente,
+      ci: solicitudSel.ci,
+      monto: solicitudSel.monto_solicitado,
+      plazo_meses: solicitudSel.plazo_meses,
+      tasa: solicitudSel.tasa_interes_anual,
+      estado: 'RECHAZADA', // RN02
+      fecha_resolucion: hoy.toLocaleString(),
+      aprobado_por: usuario?.nombre || 'Jefe de Créditos',
+      motivo_rechazo: motivoRechazo,
+      dictamen_analista: solicitudSel.evaluacion.resultado,
+      periodo_mes: '2026-03',
+      periodo_anio: '2026',
+      periodo_dia: fechaIso
+    };
+
+    setHistoricoResoluciones([resolucionRechazo, ...historicoResoluciones]);
+    setSolicitudesPendientes(solicitudesPendientes.filter(s => s.id_solicitud !== solicitudSel.id_solicitud));
+
+    mostrarNotificacion('error', 'CU08: Crédito Rechazado', `Solicitud SOL-#${solicitudSel.id_solicitud} rechazada y archivada.`);
+
+    // REINICIAR PANEL DERECHO A ESTADO EN BLANCO
+    setSolicitudSel(null);
+    setModalAccion(null);
+    setMotivoRechazo('');
+  };
+
+  // CÁLCULO DE ESTADÍSTICAS PARA EL DASHBOARD
+  const calcularEstadisticas = () => {
+    const totalAprobados = historicoResoluciones.filter(r => r.estado === 'APROBADA');
+    const totalRechazados = historicoResoluciones.filter(r => r.estado === 'RECHAZADA');
+    
+    const montoTotalAprobado = totalAprobados.reduce((sum, r) => sum + r.monto, 0);
+    const montoTotalRechazado = totalRechazados.reduce((sum, r) => sum + r.monto, 0);
+    const totalProcesados = historicoResoluciones.length;
+    const tasaAprobacion = totalProcesados > 0 ? ((totalAprobados.length / totalProcesados) * 100).toFixed(1) : '0.0';
+
+    return {
+      totalProcesados,
+      totalAprobados: totalAprobados.length,
+      totalRechazados: totalRechazados.length,
+      montoTotalAprobado,
+      montoTotalRechazado,
+      tasaAprobacion
+    };
+  };
+
+  const stats = calcularEstadisticas();
+
+  // FILTRADO DE HISTORIAL
+  const historicoFiltrado = historicoResoluciones.filter(r => {
+    const coincideEstado = filtroEstadoHistorial === 'TODOS' || r.estado === filtroEstadoHistorial;
+    const coincideBusqueda = r.cliente.toLowerCase().includes(busquedaHistorial.toLowerCase()) ||
+                             r.ci.toLowerCase().includes(busquedaHistorial.toLowerCase()) ||
+                             r.id_solicitud.toString().includes(busquedaHistorial);
+    return coincideEstado && coincideBusqueda;
+  });
+
+  return (
+    <div className="space-y-6">
+      
+      {/* TOAST SYSTEM */}
+      {notificacion && (
+        <div className="fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-50 animate-fade-in">
+          <div className={`rounded-xl p-4 shadow-2xl border bg-slate-900 text-white flex items-start gap-3 ${
+            notificacion.tipo === 'success' ? 'border-emerald-500' : notificacion.tipo === 'warning' ? 'border-amber-500' : 'border-rose-500'
+          }`}>
+            <div className="mt-0.5 shrink-0">
+              {notificacion.tipo === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <ShieldAlert className="w-5 h-5 text-rose-400" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold truncate">{notificacion.titulo}</h4>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{notificacion.mensaje}</p>
+            </div>
+            <button onClick={() => setNotificacion(null)} className="text-slate-400 hover:text-white">&times;</button>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER PRINCIPAL Y NAVEGACIÓN ENTRE VISTAS */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-slate-800" />
+            <h1 className="text-xl font-bold text-slate-800">Módulo de Aprobaciones (CU07 / CU08)</h1>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">Gestión del Jefe de Créditos · Atribuciones (RN04), Contratos (RN05), Cronogramas (RN06) y Estadísticas.</p>
+        </div>
+
+        {/* NAVEGACIÓN ENTRE VISTAS DE PESTAÑAS */}
+        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 self-start sm:self-auto overflow-x-auto max-w-full">
+          <button
+            onClick={() => setVistaActiva('PENDIENTES')}
+            className={`px-4 py-2 text-xs font-bold rounded-md transition-colors whitespace-nowrap ${
+              vistaActiva === 'PENDIENTES' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Bandeja({solicitudesPendientes.length})
+          </button>
+          <button
+            onClick={() => setVistaActiva('HISTORIAL')}
+            className={`px-4 py-2 text-xs font-bold rounded-md transition-colors whitespace-nowrap ${
+              vistaActiva === 'HISTORIAL' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Historial ({historicoResoluciones.length})
+          </button>
+          <button
+            onClick={() => setVistaActiva('ESTADISTICAS')}
+            className={`px-4 py-2 text-xs font-bold rounded-md transition-colors whitespace-nowrap ${
+              vistaActiva === 'ESTADISTICAS' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Estadística
+          </button>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          VISTA 1: BANDEJA DE DECISIONES DE EVALUACIÓN (CU07 / CU08)
+         ========================================================================= */}
+      {vistaActiva === 'PENDIENTES' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* PANEL IZQUIERDO: LISTA DE SOLICITUDES PENDIENTES */}
+          <div className="lg:col-span-1 bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pendientes de Decisión</h3>
+              <span className="text-[10px] font-bold bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full">
+                {solicitudesPendientes.length} por revisar
+              </span>
+            </div>
+            
+            <div className="space-y-3">
+              {solicitudesPendientes.length > 0 ? (
+                solicitudesPendientes.map((sol) => (
+                  <div 
+                    key={sol.id_solicitud}
+                    onClick={() => setSolicitudSel(sol)}
+                    className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                      solicitudSel?.id_solicitud === sol.id_solicitud 
+                        ? 'border-slate-800 bg-slate-50 shadow-sm ring-1 ring-slate-800' 
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[10px] font-mono bg-sky-100 text-sky-800 px-2 py-0.5 rounded font-bold">
+                        SOL-#{sol.id_solicitud}
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">Bs. {sol.monto_solicitado.toLocaleString()}</span>
+                    </div>
+                    <h4 className="font-semibold text-slate-900 text-sm">{sol.cliente}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">C.I.: {sol.ci} | {sol.destino_credito}</p>
+
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center text-xs">
+                      <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                        {sol.evaluacion.resultado}
+                      </span>
+                      <span className="text-slate-800 font-bold flex items-center gap-1">
+                        Revisar <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-slate-400 text-xs sm:text-sm">
+                  No existen solicitudes pendientes en la bandeja de evaluación.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* PANEL DERECHO: REVISIÓN INTEGRAL 360° Y ACCIÓN OFICIAL */}
+          <div className="lg:col-span-2">
+            {solicitudSel ? (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-6">
+                
+                {/* CABECERA RESUMEN SOLICITUD */}
+                <div className="flex justify-between items-start border-b border-slate-200 pb-4">
+                  <div>
+                    <span className="text-xs font-mono text-slate-400">Expediente SOL-#{solicitudSel.id_solicitud}</span>
+                    <h2 className="text-lg font-bold text-slate-900">{solicitudSel.cliente}</h2>
+                    <p className="text-xs text-slate-500">C.I.: {solicitudSel.ci} | Solicitado: {solicitudSel.fecha_solicitud}</p>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-xs text-slate-400 block font-medium">Monto Aprobación</span>
+                    <span className="text-2xl font-black text-slate-900">Bs. {solicitudSel.monto_solicitado.toLocaleString()}</span>
+                    <span className="text-xs text-slate-500 block">{solicitudSel.plazo_meses} meses @ {solicitudSel.tasa_interes_anual}%</span>
+                  </div>
+                </div>
+
+                {/* ADVERTENCIA DE VERIFICACIÓN DE ATRIBUCIÓN (RN04) */}
+                {solicitudSel.monto_solicitado > LIMITE_ATRIBUCION_JEFE && (
+                  <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-3.5 rounded-xl text-xs text-amber-900">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block font-bold">RN04 - Exceso de Atribución Crediticia:</strong>
+                      El monto (Bs. {solicitudSel.monto_solicitado.toLocaleString()}) supera su atribución máxima (Bs. {LIMITE_ATRIBUCION_JEFE.toLocaleString()}). Al intentar aprobar se requerirá confirmación de escalamiento.
+                    </div>
+                  </div>
+                )}
+
+                {/* EVALUACIÓN DE CAPACIDAD Y RIESGO (CU04 / CU05) */}
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Dictamen del Analista de Crédito</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-3 text-xs">
+                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                      <span className="text-slate-500 block">Ingresos Verificados</span>
+                      <span className="font-bold text-slate-900">Bs. {solicitudSel.evaluacion.ingresos.toLocaleString()}</span>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                      <span className="text-slate-500 block">Gastos Registrados</span>
+                      <span className="font-bold text-slate-900">Bs. {solicitudSel.evaluacion.gastos.toLocaleString()}</span>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                      <span className="text-slate-500 block">Capacidad de Pago</span>
+                      <span className="font-bold text-slate-900">Bs. {solicitudSel.evaluacion.capacidad_pago.toLocaleString()}</span>
+                    </div>
+                    <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-emerald-900">
+                      <span className="block text-[11px] font-semibold">Cobertura (DSCR)</span>
+                      <span className="text-lg font-black">{solicitudSel.evaluacion.cobertura_dscr}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                    <div className="flex justify-between font-semibold text-slate-700">
+                      <span>Analista Evaluador: {solicitudSel.evaluacion.analista}</span>
+                      <span>Nivel Riesgo: <strong className="text-slate-900">{solicitudSel.evaluacion.nivel_riesgo}</strong></span>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed italic">"{solicitudSel.evaluacion.observaciones_analista}"</p>
+                  </div>
+                </div>
+
+                {/* HISTORIAL BURÓ (CU03) Y GARANTÍA (CU06) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="border border-slate-200 p-4 rounded-xl bg-slate-50">
+                    <h4 className="font-bold text-slate-700 mb-2">Central de Riesgos (ASFI)</h4>
+                    <p><strong>Calificación:</strong> <span className="text-emerald-700 font-bold">{solicitudSel.evaluacion.calificacion_asfi}</span></p>
+                    <p><strong>Score Buró:</strong> {solicitudSel.evaluacion.score_buro} / 850</p>
+                    <p><strong>Ref. Consulta:</strong> {solicitudSel.evaluacion.ref_asfi}</p>
+                  </div>
+
+                  <div className="border border-slate-200 p-4 rounded-xl bg-slate-50">
+                    <h4 className="font-bold text-slate-700 mb-2">Garantía Colateral (CU06)</h4>
+                    <p><strong>Tipo:</strong> {solicitudSel.garantia_detalles.tipo}</p>
+                    <p><strong>Valor Comercial:</strong> Bs. {solicitudSel.garantia_detalles.valor_comercial.toLocaleString()}</p>
+                    <p><strong>Cobertura:</strong> <span className="text-emerald-700 font-bold">{solicitudSel.garantia_detalles.cobertura_garantia}</span></p>
+                  </div>
+                </div>
+
+                {/* BOTONES DE ACCIÓN (CU07 / CU08) */}
+                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
+                  <button
+                    onClick={() => setModalAccion('CONFIRMAR_RECHAZAR')}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-colors"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Rechazar Crédito (CU08)
+                  </button>
+
+                  <button
+                    onClick={() => setModalAccion('CONFIRMAR_APROBAR')}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow transition-colors"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    Aprobar Crédito y Generar Documentos (CU07)
+                  </button>
+                </div>
+
+              </div>
+            ) : (
+              // PANEL DERECHO EN BLANCO SOLICITADO
+              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-xs sm:text-sm shadow-sm flex flex-col items-center justify-center min-h-[400px]">
+                <FileText className="w-12 h-12 text-slate-300 mb-3" />
+                <p className="font-semibold text-slate-600">Seleccione una solicitud de la lista izquierda para revisar el expediente integral.</p>
+                <p className="text-xs text-slate-400 mt-1">El expediente incluye evaluación de capacidad, riesgo ASFI y garantías colaterales.</p>
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* =========================================================================
+          VISTA 2: HISTORIAL DE RESOLUCIONES (REPORTE Y SEGUIMIENTO)
+         ========================================================================= */}
+      {vistaActiva === 'HISTORIAL' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Buscar en historial por Cliente, C.I. o N° Solicitud..."
+                value={busquedaHistorial}
+                onChange={(e) => setBusquedaHistorial(e.target.value)}
+                className="w-full sm:w-80 text-xs sm:text-sm border-none focus:outline-none text-slate-800 placeholder-slate-400"
+              />
+            </div>
+
+            <div className="flex overflow-x-auto w-full sm:w-auto gap-1 text-xs">
+              {['TODOS', 'APROBADA', 'RECHAZADA'].map((est) => (
+                <button
+                  key={est}
+                  onClick={() => setFiltroEstadoHistorial(est)}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+                    filtroEstadoHistorial === est 
+                      ? 'bg-slate-800 text-white' 
+                      : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {est}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[11px]">
+                  <tr>
+                    <th className="p-4">Solicitud / Cliente</th>
+                    <th className="p-4">Monto & Términos</th>
+                    <th className="p-4">Estado Final</th>
+                    <th className="p-4">Resolución / Documentos</th>
+                    <th className="p-4">Aprobado Por</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {historicoFiltrado.length > 0 ? (
+                    historicoFiltrado.map((res) => (
+                      <tr key={res.id_solicitud} className="hover:bg-slate-50">
+                        <td className="p-4">
+                          <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold block w-max mb-1">
+                            SOL-#{res.id_solicitud}
+                          </span>
+                          <div className="font-bold text-slate-900">{res.cliente}</div>
+                          <div className="text-xs text-slate-400">{res.ci}</div>
+                        </td>
+                        <td className="p-4">
+                          <div className="font-bold text-slate-900">Bs. {res.monto.toLocaleString()}</div>
+                          <div className="text-xs text-slate-500">{res.plazo_meses} meses @ {res.tasa}%</div>
+                        </td>
+                        <td className="p-4">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                            res.estado === 'APROBADA' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+                          }`}>
+                            {res.estado}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          {res.estado === 'APROBADA' ? (
+                            <div>
+                              <span className="font-mono text-xs text-emerald-700 font-bold block">{res.num_contrato}</span>
+                              <span className="text-[11px] text-slate-400">Contrato y Cronograma OK</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-rose-600 italic block">{res.motivo_rechazo}</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-xs text-slate-600">
+                          {res.aprobado_por}
+                          <div className="text-[10px] text-slate-400">{res.fecha_resolucion}</div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="p-8 text-center text-slate-400 text-sm">
+                        No hay resoluciones registradas en el historial.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          VISTA 3: DASHBOARD ESTADÍSTICO Y REPORTES POR MES/DÍA/AÑO
+         ========================================================================= */}
+      {vistaActiva === 'ESTADISTICAS' && (
+        <div className="space-y-6">
+          
+          {/* FILTRO TEMPORAL */}
+          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Período Estadístico</span>
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+              <button onClick={() => setFiltroEstadistica('DIA')} className={`px-3 py-1 rounded font-bold ${filtroEstadistica === 'DIA' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>Hoy / Día</button>
+              <button onClick={() => setFiltroEstadistica('MES')} className={`px-3 py-1 rounded font-bold ${filtroEstadistica === 'MES' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>Este Mes (Marzo 2026)</button>
+              <button onClick={() => setFiltroEstadistica('ANIO')} className={`px-3 py-1 rounded font-bold ${filtroEstadistica === 'ANIO' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>Año 2026</button>
+            </div>
+          </div>
+
+          {/* TARJETAS DE KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+              <span className="text-xs text-slate-500 font-medium block">Total Solicitudes Dictaminadas</span>
+              <span className="text-3xl font-black text-slate-900 mt-1 block">{stats.totalProcesados}</span>
+              <span className="text-[11px] text-slate-400 mt-1 block">Bandeja de decisiones</span>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+              <span className="text-xs text-slate-500 font-medium block">Tasa de Aprobación</span>
+              <span className="text-3xl font-black text-emerald-600 mt-1 block">{stats.tasaAprobacion}%</span>
+              <span className="text-[11px] text-slate-400 mt-1 block">{stats.totalAprobados} aprobadas / {stats.totalRechazados} rechazadas</span>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+              <span className="text-xs text-slate-500 font-medium block">Volumen Colocado Aprobado</span>
+              <span className="text-2xl font-black text-slate-900 mt-1 block">Bs. {stats.montoTotalAprobado.toLocaleString()}</span>
+              <span className="text-[11px] text-emerald-600 mt-1 block">Cartera aprobada</span>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+              <span className="text-xs text-slate-500 font-medium block">Volumen Rechazado</span>
+              <span className="text-2xl font-black text-rose-600 mt-1 block">Bs. {stats.montoTotalRechazado.toLocaleString()}</span>
+              <span className="text-[11px] text-rose-400 mt-1 block">Riesgo no admitido</span>
+            </div>
+          </div>
+
+          {/* ANÁLISIS BARRAS Y DISTRIBUCIÓN */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-slate-800">Distribución de Decisiones de Crédito</h3>
+            
+            <div className="space-y-3 text-xs">
+              <div>
+                <div className="flex justify-between font-semibold mb-1">
+                  <span className="text-emerald-700">Solicitudes Aprobadas ({stats.totalAprobados})</span>
+                  <span>Bs. {stats.montoTotalAprobado.toLocaleString()}</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div className="bg-emerald-500 h-3 rounded-full" style={{ width: `${stats.tasaAprobacion}%` }}></div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between font-semibold mb-1">
+                  <span className="text-rose-700">Solicitudes Rechazadas ({stats.totalRechazados})</span>
+                  <span>Bs. {stats.montoTotalRechazado.toLocaleString()}</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div className="bg-rose-500 h-3 rounded-full" style={{ width: `${100 - parseFloat(stats.tasaAprobacion)}%` }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 1: CONFIRMAR APROBACIÓN OFICIAL (CU07)
+         ========================================================================= */}
+      {modalAccion === 'CONFIRMAR_APROBAR' && solicitudSel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+              <h3 className="font-bold text-sm">Confirmar Aprobación Oficial (CU07)</h3>
+              <button onClick={() => setModalAccion(null)} className="text-slate-400 hover:text-white font-bold">&times;</button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs sm:text-sm">
+              <p className="text-slate-700">
+                ¿Está seguro de aprobar el crédito de <strong className="text-slate-900">Bs. {solicitudSel.monto_solicitado.toLocaleString()}</strong> para <strong className="text-slate-900">{solicitudSel.cliente}</strong>?
+              </p>
+
+              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-lg space-y-1 text-xs text-slate-600">
+                <p>&bull; Estado cambiará a <strong>APROBADA</strong> en Supabase.</p>
+                <p>&bull; Se generará el Contrato Oficial numerado (RN05).</p>
+                <p>&bull; Se generará la Tabla de Amortización Francesa (RN06).</p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                <button type="button" onClick={() => setModalAccion(null)} className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-300 rounded-lg">Cancelar</button>
+                <button 
+                  type="button" 
+                  onClick={handleEjecutarAprobacionOficial}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg shadow text-xs"
+                >
+                  Confirmar Aprobación
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 2: CONFIRMAR RECHAZO DE CRÉDITO (CU08)
+         ========================================================================= */}
+      {modalAccion === 'CONFIRMAR_RECHAZAR' && solicitudSel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-4 bg-rose-900 text-white flex justify-between items-center">
+              <h3 className="font-bold text-sm">Rechazar Solicitud SOL-#{solicitudSel.id_solicitud}</h3>
+              <button onClick={() => setModalAccion(null)} className="text-rose-200 hover:text-white font-bold">&times;</button>
+            </div>
+
+            <form onSubmit={handleEjecutarRechazoOficial} className="p-6 space-y-4">
+              <p className="text-xs text-slate-600">
+                El crédito pasará a estado <strong>RECHAZADA</strong>. Ingrese el motivo fundamentado para el expediente.
+              </p>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Motivo del Rechazo *</label>
+                <textarea
+                  value={motivoRechazo}
+                  onChange={(e) => setMotivoRechazo(e.target.value)}
+                  rows="3"
+                  required
+                  placeholder="Ej. Registro de deudas en mora en la Central de Riesgos ASFI o insuficiente capacidad de pago."
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-rose-500"
+                ></textarea>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setModalAccion(null)} className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-300 rounded-lg">Cancelar</button>
+                <button type="submit" className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow">Confirmar Rechazo (CU08)</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 3: VER E IMPRIMIR DOCUMENTOS GENERADOS (RN05 / RN06)
+         ========================================================================= */}
+      {modalAccion === 'VER_DOCUMENTOS' && docModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
+            
+            <div className="p-5 bg-slate-900 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-bold text-base">Documentos Oficiales Generados (RN05 / RN06)</h3>
+              </div>
+              <button onClick={() => setModalAccion(null)} className="text-slate-400 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm">
+              
+              {/* CONTRATO OFICIAL (RN05) */}
+              <div className="border border-slate-200 rounded-xl p-5 bg-slate-50 space-y-3 print:bg-white">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                  <span className="font-bold text-slate-900 text-sm">Contrato de Préstamo Monetario (RN05)</span>
+                  <span className="font-mono font-extrabold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded text-xs">
+                    {docModal.contrato.num_contrato}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
+                  <div><strong>Titular:</strong> {docModal.contrato.titular}</div>
+                  <div><strong>C.I.:</strong> {docModal.contrato.ci}</div>
+                  <div><strong>Monto Aprobado:</strong> Bs. {docModal.contrato.monto.toLocaleString()}</div>
+                  <div><strong>Tasa Anual:</strong> {docModal.contrato.tasa}%</div>
+                  <div><strong>Aprobado Por:</strong> {docModal.contrato.aprobado_por}</div>
+                  <div><strong>Fecha Emisión:</strong> {docModal.contrato.fecha_emision}</div>
+                </div>
+              </div>
+
+              {/* PLAN DE PAGOS / CRONOGRAMA FRANCÉS (RN06) */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="p-3 bg-slate-100 font-bold text-slate-800 text-xs flex justify-between items-center">
+                  <span>Plan de Pagos - Sistema Francés (RN06)</span>
+                  <span className="text-[11px] text-slate-500">{docModal.cronograma.length} cuotas mensuales</span>
+                </div>
+
+                <div className="max-h-56 overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-[10px] uppercase sticky top-0">
+                      <tr>
+                        <th className="p-2.5">N° Cuota</th>
+                        <th className="p-2.5">Vencimiento</th>
+                        <th className="p-2.5">Cuota Total (Bs.)</th>
+                        <th className="p-2.5">Capital (Bs.)</th>
+                        <th className="p-2.5">Interés (Bs.)</th>
+                        <th className="p-2.5">Saldo (Bs.)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono">
+                      {docModal.cronograma.map((c) => (
+                        <tr key={c.num_cuota} className="hover:bg-slate-50">
+                          <td className="p-2.5 font-bold text-slate-900">#{c.num_cuota}</td>
+                          <td className="p-2.5 text-slate-600">{c.fecha_vencimiento}</td>
+                          <td className="p-2.5 font-bold text-slate-900">{c.cuota_total}</td>
+                          <td className="p-2.5 text-slate-700">{c.capital}</td>
+                          <td className="p-2.5 text-slate-700">{c.interes}</td>
+                          <td className="p-2.5 text-slate-500">{c.saldo_pendiente}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                <button 
+                  onClick={() => window.print()} 
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold"
+                >
+                  <Printer className="w-4 h-4" /> Imprimir Documentos (PDF)
+                </button>
+                
+                <button
+                  onClick={() => setModalAccion(null)}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs shadow"
+                >
+                  Entendido (Continuar Evaluación)
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+Para que los casos de uso CU09 y CU10 tengan un enfoque más profesional y representen un proceso crediticio real, te recomiendo diseñarlos como parte de un proceso de formalización documental del crédito, similar al que utilizan las entidades financieras: generación del contrato, emisión del comprobante de desembolso y elaboración de la tabla de amortización.
+
+Además, es importante que los casos de uso sean coherentes con tu base de datos PostgreSQL, con el módulo de aprobaciones que compartiste y con los tres documentos que deseas generar con formato membretado institucional.
+
+1. Casos de uso mejorados para tu documentación
+CU09 – Generar documentación contractual del crédito
+CU09 – Generar documentación contractual
+
+Formalización documental de un crédito aprobado
+
+Actor principal: Sistema de gestión de créditos.
+
+Actores secundarios: Oficial o responsable de créditos y cliente beneficiario.
+
+Objetivo: Generar, registrar y poner a disposición del personal autorizado la documentación correspondiente al crédito aprobado, garantizando la consistencia de los datos y la trazabilidad del proceso.
+
+Precondiciones
+
+La solicitud de crédito se encuentra en estado APROBADA.
+
+Existe un registro de crédito asociado en la tabla credito.
+
+El crédito dispone de un número único, monto aprobado, tasa de interés y plazo válidos.
+
+Se dispone de los datos de identificación del cliente y de la información institucional necesaria para elaborar los documentos.
+
+Las garantías y sus documentos de respaldo se encuentran registrados cuando correspondan.
+
+Flujo principal
+
+El sistema recupera la información de la solicitud aprobada, el cliente, el crédito, las garantías y la configuración institucional.
+
+Verifica que los datos obligatorios sean consistentes y que el crédito no tenga documentación contractual previamente generada.
+
+Genera un número único de contrato y registra la fecha de emisión.
+
+Elabora el Acuerdo de Condiciones de Crédito, incluyendo los datos del cliente, monto aprobado, tasa de interés, plazo, cuota estimada o definitiva, fechas de vencimiento, garantías y condiciones particulares.
+
+Genera la documentación complementaria correspondiente, incluido el contrato privado de préstamo, conforme a las plantillas institucionales y las cláusulas autorizadas.
+
+Incorpora el membrete institucional, la razón social, el NIT, los datos de contacto y la identificación del documento.
+
+Presenta los documentos para revisión, impresión o descarga en PDF por parte del personal autorizado.
+
+Registra el contrato en la tabla contrato, asociado al crédito mediante id_credito, con su número, fecha de firma cuando corresponda y estado documental.
+
+Confirma la generación y disponibilidad de la documentación.
+
+Flujos alternativos y excepciones
+
+A1. Datos incompletos: el sistema informa los campos faltantes y no genera documentos definitivos.
+
+A2. Crédito no aprobado o inexistente: se cancela la operación y se informa que el crédito no cumple las condiciones para formalizarse.
+
+A3. Contrato duplicado: el sistema identifica el contrato existente y evita generar otro para el mismo crédito.
+
+A4. Garantías incompletas: cuando sean obligatorias, se suspende la formalización hasta completar su información y respaldo documental.
+
+A5. Error al generar o guardar documentos: se informa el error y se evita dejar registros parciales o inconsistentes.
+
+A6. Firma pendiente: el contrato se mantiene en estado pendiente de firma; no se registra como firmado hasta que exista constancia válida.
+
+Postcondiciones
+
+Existe un registro único del contrato asociado al crédito.
+
+La documentación contractual está generada y disponible para revisión o impresión.
+
+El estado documental refleja la situación real del proceso.
+
+Se conserva la trazabilidad de la emisión y, cuando corresponda, de la firma.
+
+Importante: tu tabla contrato solo permite almacenar el número, el crédito, la fecha de firma y el estado. Para registrar también la fecha de emisión, el archivo PDF, la fecha de desembolso documental y la trazabilidad de las versiones, sería necesario ampliar el modelo de datos.
+
+CU10 – Generar cronograma de amortización del crédito
+CU10 – Generar cronograma de amortización
+
+Determinación de cuotas y fechas de pago
+
+Actor principal: Sistema de gestión de créditos.
+
+Actores secundarios: Oficial de créditos y cliente beneficiario.
+
+Objetivo: Calcular y registrar el plan de pagos del crédito, detallando la distribución de capital e intereses, las fechas de vencimiento y el saldo de capital después de cada cuota.
+
+Precondiciones
+
+Existe un crédito aprobado y registrado en la tabla credito.
+
+El monto aprobado, la tasa de interés y el plazo son válidos.
+
+Se ha definido la fecha inicial de cálculo y la periodicidad de pago.
+
+Se ha establecido el sistema de amortización y las reglas de redondeo aplicables.
+
+Los parámetros necesarios para determinar la primera fecha de vencimiento están disponibles.
+
+Flujo principal
+
+El sistema recupera el número de crédito, el monto aprobado, la tasa de interés, el plazo y la información necesaria para establecer las fechas de pago.
+
+Valida los parámetros financieros y la ausencia de un cronograma duplicado para la misma versión del crédito.
+
+Determina la tasa periódica y el método de amortización configurado.
+
+Calcula el importe de la cuota y desglosa cada pago en capital e intereses.
+
+Determina la fecha de vencimiento de cada cuota, de acuerdo con la periodicidad y las reglas de calendario establecidas.
+
+Calcula el saldo de capital después de cada pago, aplicando las reglas de precisión monetaria.
+
+Registra las cuotas en la tabla cuota, incluyendo número de cuota, vencimiento, capital, interés, importe total, saldo y estado inicial.
+
+Verifica que el cronograma esté completo, que las cuotas correspondan al plazo y que los importes y saldos sean consistentes.
+
+Genera la tabla de amortización en formato institucional membretado, vinculada al número de crédito y al contrato correspondiente.
+
+Presenta el documento para su consulta, impresión o descarga en PDF.
+
+Flujos alternativos y excepciones
+
+A1. Parámetros inválidos: se informa el campo incorrecto y se cancela el cálculo.
+
+A2. Crédito inexistente o no aprobado: no se genera el cronograma.
+
+A3. Fecha de vencimiento no válida: se aplica la regla de calendario definida o se solicita corregir la fecha inicial.
+
+A4. Cronograma existente: se impide la duplicación de cuotas; cualquier modificación requiere un procedimiento autorizado de actualización o refinanciamiento.
+
+A5. Diferencias por redondeo: se ajusta la última cuota conforme a las reglas financieras aprobadas, sin alterar arbitrariamente los importes.
+
+A6. Error de persistencia: se revierte la operación para evitar que queden cuotas incompletas.
+
+Postcondiciones
+
+Las cuotas quedan registradas y relacionadas con el crédito mediante id_credito.
+
+El cronograma refleja las condiciones financieras aprobadas.
+
+Los saldos y los importes de capital e intereses son consistentes con el método de amortización utilizado.
+
+La tabla de amortización está disponible para consulta, impresión o descarga.
+
+2. Cómo se relacionan los casos de uso con tu base de datos
+
+La estructura que ya tienes permite implementar una parte importante del proceso sin crear todo desde cero.
+
+Tabla
+
+	
+
+Función en el proceso
+
+
+
+
+solicitud_credito
+
+	
+
+Proporciona el destino, plazo, monto solicitado, tasa solicitada y estado de la solicitud.
+
+
+
+
+evaluacion_credito
+
+	
+
+Permite verificar el resultado de la evaluación financiera.
+
+
+
+
+credito
+
+	
+
+Es la fuente principal de las condiciones aprobadas: número de crédito, monto, tasa, plazo y estado.
+
+
+
+
+contrato
+
+	
+
+Almacena el número de contrato, su relación con el crédito, la fecha de firma y el estado.
+
+
+
+
+cuota
+
+	
+
+Almacena cada cuota del cronograma, sus componentes financieros y el saldo.
+
+
+
+
+configuracion_institucion
+
+	
+
+Proporciona razón social, NIT, dirección, teléfono, moneda y logotipo para el membrete.
+
+
+
+
+garantia
+
+	
+
+Aporta el tipo de garantía, descripción, valor de avalúo, estado y documento de respaldo.
+
+Hay dos aspectos importantes en el modelo actual:
+
+La tabla credito contiene fecha_desembolso, pero no almacena una fecha específica de aprobación ni el importe efectivamente desembolsado por separado del monto aprobado.
+
+La tabla contrato no tiene un campo fecha_emision ni una referencia al archivo PDF. La fecha de firma no debe utilizarse como sustituto de la fecha de emisión, porque son eventos distintos.
+
+También necesitas consultar la tabla cliente para obtener el nombre completo, el CI y los demás datos personales. Esa tabla no está incluida en el SQL compartido, por lo que habría que verificar sus columnas reales antes de implementar las consultas.
+
+3. Estructura profesional de los tres documentos
+
+Te recomiendo que el sistema genere un expediente documental de tres hojas o secciones principales, con identidad visual institucional uniforme, numeración de páginas y datos consistentes en todos los documentos.
+
+Documento 1. Acuerdo de Condiciones de Crédito / Comprobante de desembolso
+
+Hoja 1 · Resumen de condiciones
+
+Debe presentar de manera clara las condiciones financieras del crédito y dejar constancia del desembolso cuando este se haya realizado.
+
+Membrete: logotipo, razón social, NIT, dirección y teléfono.
+
+Identificación: número de contrato, número de crédito, número de solicitud y fecha de emisión.
+
+Datos del cliente: nombre completo, CI y domicilio, si corresponde.
+
+Condiciones financieras: monto aprobado, monto desembolsado, tasa anual, plazo, cuota, moneda y sistema de amortización.
+
+Plan de pagos: fecha de la primera cuota, periodicidad y día habitual de vencimiento mensual.
+
+Garantías: tipo, descripción, valor de avalúo y documentos de respaldo.
+
+Condiciones particulares: obligaciones de pago, intereses, penalidades aplicables y referencias al contrato.
+
+Firmas: nombre, CI, firma del cliente y firma del representante autorizado; fecha y lugar.
+
+Documento 2. Tabla de amortización
+
+Hoja 2 y páginas adicionales si son necesarias
+
+Presenta el detalle de las cuotas para que el cliente y la entidad puedan verificar los importes y vencimientos.
+
+Membrete institucional e identificación del titular.
+
+Número de crédito, monto desembolsado, tasa de interés, plazo y fecha de inicio.
+
+Método de amortización y periodicidad de pago.
+
+Tabla con número de cuota, fecha de vencimiento, capital, interés, cuota total y saldo pendiente.
+
+Resumen de cuotas, total de intereses y total a pagar según el método de cálculo.
+
+Observaciones sobre fechas de vencimiento, pagos anticipados y posibles diferencias por redondeo.
+
+Referencia al contrato y espacio de validación o firma cuando la política institucional lo requiera.
+
+Documento 3. Contrato privado de préstamo de dinero
+
+Documento jurídico · Extensión según las cláusulas
+
+Formaliza los compromisos y obligaciones de las partes, sujeto a revisión jurídica y a la normativa aplicable.
+
+Identificación completa de la entidad prestamista y del prestatario.
+
+Antecedentes y objeto del contrato.
+
+Monto del préstamo, moneda, condiciones de entrega y destino.
+
+Tasa de interés, plazo, forma de pago y remisión al cronograma.
+
+Obligaciones de las partes y condiciones de incumplimiento.
+
+Garantías constituidas, cuando corresponda, y referencias a sus documentos.
+
+Pagos anticipados, modificaciones, tratamiento de mora y gastos permitidos.
+
+Domicilios para notificaciones, solución de controversias y cláusulas aplicables.
+
+Lugar, fecha, firmas, nombres y documentos de identidad de los firmantes; formalidades adicionales cuando sean exigibles.
+
+Las imágenes son referencias visuales del estilo documental, no formularios oficiales de BancoSol. Puedes utilizarlas como orientación para diseñar una plantilla propia de tu institución.
+
+Reglas que conviene aplicar a los documentos
+
+No confundir aprobación con desembolso. Un crédito aprobado no significa necesariamente que el dinero ya fue entregado. El comprobante de desembolso debe generarse o completarse cuando exista constancia de la operación.
+
+No confundir emisión con firma. Un contrato preparado para firma debe distinguirse de uno formalizado.
+
+Usar el monto aprobado, no el solicitado. Los documentos deben tomar las condiciones definitivas de credito.
+
+No calcular la cuota únicamente en la interfaz. El cronograma debe calcularse y guardarse con reglas financieras consistentes.
+
+No inventar información. Si faltan datos de identidad, garantía o desembolso, se deben señalar antes de emitir el documento definitivo.
+
+4. Ajustes necesarios en tu código React
+
+En el código que compartiste hay una diferencia relevante entre la demostración y una implementación real conectada a Supabase.
+
+Actualmente, handleEjecutarAprobacionOficial:
+
+Trabaja con datos simulados en memoria.
+
+Genera el número de contrato mediante un valor aleatorio.
+
+Calcula el cronograma en el navegador.
+
+Usa el monto solicitado como si fuera el monto aprobado.
+
+No inserta registros reales en las tablas credito, contrato y cuota.
+
+No comprueba si ya existe un contrato o un cronograma para ese crédito.
+
+No genera tres documentos PDF independientes ni registra una firma efectiva.
+
+Por tanto, aunque la interfaz muestre que los documentos se generaron, eso no acredita que hayan quedado registrados en la base de datos.
+
+Flujo recomendado para la implementación
+
+1. Aprobación del crédito
+
+Validar decisión y atribuciones del aprobador
+
+2. Registrar o verificar credito
+
+Monto, tasa, plazo, número y estado aprobados
+
+3. Generar contrato y cuota
+
+Transacción atómica y validación de duplicados
+
+4. Elaborar los tres documentos
+
+Condiciones, amortización y contrato privado
+
+5. Revisión, firma y desembolso
+
+Registrar cada evento cuando efectivamente ocurra
+
+Para mantener la integridad, la operación de creación del crédito, contrato y cuotas debería gestionarse mediante una función transaccional en PostgreSQL o un servicio de backend confiable. La generación de PDF puede realizarse después de confirmar los registros.
+
+5. Cambios recomendados en la base de datos
+
+No necesitas reemplazar tus tablas actuales. Puedes ampliarlas gradualmente.
+
+Tabla
+
+	
+
+Mejora sugerida
+
+
+
+
+contrato
+
+	
+
+Añadir fecha_emision, archivo_pdf_url, fecha_anulacion si aplica y un estado documental controlado.
+
+
+
+
+credito
+
+	
+
+Incorporar la fecha de aprobación y, si el negocio lo requiere, separar el monto desembolsado del monto aprobado.
+
+
+
+
+cuota
+
+	
+
+Añadir un identificador de versión del cronograma si se permitirán reprogramaciones o refinanciamientos.
+
+
+
+
+configuracion_institucion
+
+	
+
+Verificar que exista una configuración institucional activa y definir cómo se conserva la identidad usada en cada documento emitido.
+
+
+
+
+Nueva tabla documento_credito
+
+	
+
+Registrar tipo de documento, versión, URL o ubicación del archivo, fecha de generación, estado y relación con el crédito o contrato.
+
+
+
+
+Nueva tabla desembolso
+
+	
+
+Registrar monto efectivamente entregado, fecha, medio de desembolso, referencia y responsable, si necesitas trazabilidad financiera.
+
+En particular, tu restricción UNIQUE (id_credito) en contrato es adecuada si cada crédito solo puede tener un contrato principal. Si en el futuro necesitas adendas o versiones contractuales, convendría mantener un contrato principal y modelar las modificaciones por separado.
+
+6. Recomendación final para el proyecto
+
+Yo mantendría CU09 y CU10 como dos casos de uso independientes, pero relacionados:
+
+CU09: genera y registra la documentación contractual.
+
+CU10: calcula y registra el cronograma de amortización.
+
+Documentación de salida: reúne el acuerdo de condiciones, el comprobante de desembolso cuando proceda, la tabla de amortización y el contrato privado.
+
+El resultado sería un expediente crediticio profesional, consistente con tus tablas actuales y preparado para impresión en PDF con membrete institucional.
+
+Una última precisión: los modelos de contrato deben ser revisados por un profesional jurídico familiarizado con la normativa boliviana y los requisitos regulatorios aplicables antes de utilizarlos como documentos contractuales reales.
